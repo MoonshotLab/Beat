@@ -15,7 +15,7 @@ class BeatApp : public AppNative {
 	void setup();
 	void draw();
 
-    Color getColor( std::vector<cv::Point> points );
+    Color getColor( cv::Mat image );
     cv::Mat mHsvImage;
     cv::vector<cv::vector<cv::Point> > contours;
 };
@@ -28,10 +28,10 @@ void BeatApp::prepareSettings( Settings *settings ){
 void BeatApp::setup()
 {
     // Load the image and convert to cv Matrix
-    ci::Surface8u surface( loadImage( loadAsset( "hand-drawn.jpg" ) ) );
+    ci::Surface8u surface( loadImage( loadAsset( "computer-drawn-outlined.jpg" ) ) );
 	cv::Mat rgbImage( toOcv( surface ) );
     
-    // Conver to hsv for color detection
+    // Convert to hsv for color detection
     cv::cvtColor(rgbImage, mHsvImage, CV_BGR2HSV_FULL);
 
     // Convert the image to gray scale, threshold for strong black
@@ -46,10 +46,8 @@ void BeatApp::setup()
     cv::findContours( bwImage, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE );
 }
 
-Color BeatApp::getColor(std::vector<cv::Point> points){
+Color BeatApp::getColor( cv::Mat image ){
     Color color = Color( 0, 0, 0 );
-    
-    // Todo: Isolate the shape
 
     // Set up arrays for color checking: Red, Green, Blue
     Color colors[3] = { Color(255,0,0), ci::Color(0,255,0), ci::Color(0,0,255) };
@@ -60,7 +58,7 @@ Color BeatApp::getColor(std::vector<cv::Point> points){
     // Loop over the ranges, building black and white images
     // for each color sequence in a range
     for( int i=0; i<3; i++ ){
-        cv::inRange(mHsvImage, cv::Scalar(huesLo[i], 100, 100), cv::Scalar(huesHi[i], 256, 256), hsvImages[i]);
+        cv::inRange(image, cv::Scalar(huesLo[i], 100, 100), cv::Scalar(huesHi[i], 256, 256), hsvImages[i]);
     }
     
     // Loop over the count, setting the final color
@@ -74,8 +72,8 @@ Color BeatApp::getColor(std::vector<cv::Point> points){
     return color;
 }
 
-void drawTriangle( std::vector<cv::Point> points ){
-    gl::color( Color( 255,0,0 ) );
+void drawTriangle( std::vector<cv::Point> points, Color color ){
+    gl::color( color );
 
     gl::begin( GL_TRIANGLES );
     for( int i=0; i<points.size(); i++ ){
@@ -84,8 +82,8 @@ void drawTriangle( std::vector<cv::Point> points ){
     gl::end();
 }
 
-void drawRectangle( std::vector<cv::Point> points ){
-    gl::color( Color(0,255,0 ) );
+void drawRectangle( std::vector<cv::Point> points, Color color ){
+    gl::color( color );
 
     gl::begin( GL_QUADS );
     for( int i=0; i<points.size(); i++ ){
@@ -94,8 +92,8 @@ void drawRectangle( std::vector<cv::Point> points ){
     gl::end();
 }
 
-void drawCircle( std::vector<cv::Point> points ){
-    gl::color( Color( 0,0,255 ) );
+void drawCircle( std::vector<cv::Point> points, Color color ){
+    gl::color( color );
     
     // Find the center point
     cv::Point2i zero(0.0f, 0.0f);
@@ -120,19 +118,31 @@ void BeatApp::draw()
     // Loop over all contours in memory and draw shapes
     for( int i = 0; i < contours.size(); i++ )
     {
+        // Take the contours and build polygon points to help
+        // simulate a shape
         std::vector<cv::Point> polygonPoints;
         cv::approxPolyDP(cv::Mat(contours[i]), polygonPoints,
                          cv::arcLength(cv::Mat(contours[i]), true)*0.02, true);
         
+        // Isolate the shape by cropping around it's bounding box
+        cv::Rect boundingBox = cv::boundingRect(polygonPoints);
+        cv::Mat cropped(mHsvImage.size(), CV_8UC1);
+        cv::Mat mask(mHsvImage.size(), CV_8UC1, cv::Scalar::all(0));
+        mask(boundingBox).setTo(cv::Scalar::all(255));
+        mHsvImage.copyTo(cropped, mask);
+        
+        // Discover it's color
+        Color color = getColor(cropped);
+        
         switch( polygonPoints.size() ){
             case 3:
-                drawTriangle( polygonPoints );
+                drawTriangle( polygonPoints, color );
                 break;
             case 4:
-                drawRectangle( polygonPoints );
+                drawRectangle( polygonPoints, color );
                 break;
             default:
-                drawCircle( polygonPoints );
+                drawCircle( polygonPoints, color );
                 break;
         }
     }
