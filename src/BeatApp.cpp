@@ -14,10 +14,10 @@ class BeatApp : public AppNative {
     void prepareSettings( Settings *settings );
 	void setup();
 	void draw();
-    
+
+    Color getColor( std::vector<cv::Point> points );
+    cv::Mat mHsvImage;
     cv::vector<cv::vector<cv::Point> > contours;
-	gl::Texture	mTexture;
-    double mApproxEps;
 };
 
 void BeatApp::prepareSettings( Settings *settings ){
@@ -29,21 +29,49 @@ void BeatApp::setup()
 {
     // Load the image and convert to cv Matrix
     ci::Surface8u surface( loadImage( loadAsset( "hand-drawn.jpg" ) ) );
-	cv::Mat colorImage( toOcv( surface ) );
+	cv::Mat rgbImage( toOcv( surface ) );
     
+    // Conver to hsv for color detection
+    cv::cvtColor(rgbImage, mHsvImage, CV_BGR2HSV_FULL);
+
     // Convert the image to gray scale, threshold for strong black
     // and white image, then inverse so it's white on black
     cv::Mat bwImage;
-    cv::cvtColor( colorImage, bwImage, CV_BGR2GRAY );
+    cv::cvtColor( rgbImage, bwImage, CV_BGR2GRAY );
     cv::threshold( bwImage, bwImage, 150, 255, 0 );
     cv::bitwise_not( bwImage, bwImage );
     
     // Find the contours within an image
     cv::vector<cv::Vec4i> hierarchy;
     cv::findContours( bwImage, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE );
+}
 
-    // Transform output image into gl texture so we can write to screen
-    mTexture = gl::Texture( fromOcv( bwImage ) );
+Color BeatApp::getColor(std::vector<cv::Point> points){
+    Color color = Color( 0, 0, 0 );
+    
+    // Todo: Isolate the shape
+
+    // Set up arrays for color checking: Red, Green, Blue
+    Color colors[3] = { Color(255,0,0), ci::Color(0,255,0), ci::Color(0,0,255) };
+    int huesLo[3]   = { 0,  50,  100 };
+    int huesHi[3]   = { 60, 100, 180 };
+    cv::Mat hsvImages[3] = { *new cv::Mat, *new cv::Mat, *new cv::Mat };
+
+    // Loop over the ranges, building black and white images
+    // for each color sequence in a range
+    for( int i=0; i<3; i++ ){
+        cv::inRange(mHsvImage, cv::Scalar(huesLo[i], 100, 100), cv::Scalar(huesHi[i], 256, 256), hsvImages[i]);
+    }
+    
+    // Loop over the count, setting the final color
+    int maxCount = 0;
+    for( int i=0; i<3; i++ ){
+        int count = cv::countNonZero(hsvImages[i]);
+        if(count > maxCount)
+            color = colors[i];
+    }
+    
+    return color;
 }
 
 void drawTriangle( std::vector<cv::Point> points ){
@@ -88,7 +116,6 @@ void drawCircle( std::vector<cv::Point> points ){
 void BeatApp::draw()
 {
     gl::clear();
-    gl::draw( mTexture );
 
     // Loop over all contours in memory and draw shapes
     for( int i = 0; i < contours.size(); i++ )
