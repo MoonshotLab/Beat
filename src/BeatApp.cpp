@@ -17,6 +17,7 @@ class BeatApp : public AppNative {
 	void setup();
     void update();
 	void draw();
+    void keyUp( KeyEvent e );
     void createMemberContoursFromFrame();
 
     int xRes = 640;
@@ -30,6 +31,7 @@ class BeatApp : public AppNative {
     cv::vector<cv::vector<cv::Point> > mContours;
     
     params::InterfaceGlRef mParams;
+    bool mConfigShowParams;
     int mConfigTresholdHi;
     int mConfigTresholdLo;
     int mConfigRedHueHi;
@@ -55,6 +57,7 @@ void BeatApp::prepareSettings( Settings *settings ){
 void BeatApp::setup()
 {
     // Default Settings
+    mConfigShowParams       = false;
     mConfigTresholdLo       = 100;
     mConfigTresholdHi       = 255;
     mConfigRedHueLo         = 0;
@@ -117,6 +120,12 @@ void BeatApp::update()
         gl::Texture mDisplayTexture;
         createMemberContoursFromFrame();
     }
+}
+
+void BeatApp::keyUp( KeyEvent e )
+{
+    if(e.getChar() == 'p')
+        mConfigShowParams = !mConfigShowParams;
 }
 
 void BeatApp::createMemberContoursFromFrame(){
@@ -268,7 +277,8 @@ void BeatApp::draw()
         }
     }
     
-    mParams->draw();
+    if(mConfigShowParams)
+        mParams->draw();
 }
 
 
